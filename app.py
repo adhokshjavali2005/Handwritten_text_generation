@@ -2,6 +2,8 @@ from fastapi import FastAPI
 import numpy as np
 import random
 from tensorflow.keras.models import load_model
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
 
@@ -18,7 +20,7 @@ vocab_size = len(chars)
 char_to_idx = {c: i for i, c in enumerate(chars)}
 idx_to_char = {i: c for i, c in enumerate(chars)}
 
-sequence_length = 40
+sequence_length = 60
 
 def sample(preds, temperature=0.4):
     preds = np.asarray(preds).astype("float64")
@@ -43,6 +45,14 @@ def generate_text(length=120):
         seed = seed[1:] + next_char
 
     return generated
+    
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # allow Lovable & any frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def home():
@@ -51,4 +61,5 @@ def home():
 @app.get("/generate")
 def generate():
     return {"generated_text": generate_text()}
+
 
