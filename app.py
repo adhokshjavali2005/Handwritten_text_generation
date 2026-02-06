@@ -51,3 +51,4 @@ def home():
 @app.get("/generate")
 def generate():
     return {"generated_text": generate_text()}
+
