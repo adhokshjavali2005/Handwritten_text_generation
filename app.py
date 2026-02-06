@@ -4,8 +4,15 @@ import random
 from tensorflow.keras.models import load_model
 from fastapi.middleware.cors import CORSMiddleware
 
-
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Load model
 model = load_model("handwritten_text_rnn.h5")
@@ -46,13 +53,6 @@ def generate_text(length=120):
 
     return generated
     
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # allow Lovable & any frontend
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 @app.get("/")
 def home():
@@ -61,5 +61,6 @@ def home():
 @app.get("/generate")
 def generate():
     return {"generated_text": generate_text()}
+
 
 
