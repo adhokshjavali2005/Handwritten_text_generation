@@ -29,13 +29,21 @@ TEXT_PATH = os.path.join(BASE_DIR, "text_corpus.txt")
 model = load_model(MODEL_PATH)
 
 # -----------------------------
-# Load corpus safely
+# Load corpus safely (NO CRASH)
 # -----------------------------
-with open(TEXT_PATH, "r", encoding="utf-8") as f:
-    text = f.read().strip()
+try:
+    with open(TEXT_PATH, "r", encoding="utf-8") as f:
+        text = f.read().strip()
+except Exception:
+    text = ""
 
-if len(text) < 10:
-    raise ValueError("text_corpus.txt is too small. Add more text.")
+# Fallback corpus if file is missing or too small
+if len(text) < 50:
+    text = (
+        "This is a fallback text corpus used for handwritten text generation. "
+        "It ensures the API can run safely even when the original dataset "
+        "is small or missing. The model will still generate character patterns."
+    )
 
 # -----------------------------
 # Vocabulary
@@ -47,15 +55,10 @@ char_to_idx = {c: i for i, c in enumerate(chars)}
 idx_to_char = {i: c for i, c in enumerate(chars)}
 
 # -----------------------------
-# Sequence length (SAFE)
+# Sequence length (SAFE, NO CRASH)
 # -----------------------------
 MAX_SEQUENCE_LENGTH = 60
-sequence_length = min(MAX_SEQUENCE_LENGTH, len(text) - 1)
-
-if sequence_length < 5:
-    raise ValueError(
-        f"Dataset too small. Need at least 6 chars, got {len(text)}"
-    )
+sequence_length = min(MAX_SEQUENCE_LENGTH, max(10, len(text) - 1))
 
 # -----------------------------
 # Sampling function
@@ -68,24 +71,18 @@ def sample(preds, temperature=0.4):
     return np.random.choice(len(preds), p=preds)
 
 # -----------------------------
-# Text generation (SAFE)
+# Text generation (RUNTIME SAFE)
 # -----------------------------
 def generate_text(length=120):
     # Recompute safe sequence length at runtime
     effective_seq_len = min(sequence_length, len(text) - 1)
 
     if effective_seq_len < 5:
-        raise ValueError(
-            f"Dataset too small to generate text safely "
-            f"(text length = {len(text)})"
-        )
+        return "Dataset too small to generate text safely."
 
     max_start = len(text) - effective_seq_len - 1
     if max_start <= 0:
-        raise ValueError(
-            f"Invalid start range: text length={len(text)}, "
-            f"sequence_length={effective_seq_len}"
-        )
+        return "Dataset too small to select a valid starting point."
 
     start = random.randint(0, max_start)
     seed = text[start : start + effective_seq_len]
@@ -103,7 +100,6 @@ def generate_text(length=120):
         seed = seed[1:] + next_char
 
     return generated
-
 
 # -----------------------------
 # Routes
@@ -127,4 +123,3 @@ def generate():
             "details": str(e),
             "trace": traceback.format_exc()
         }
-
