@@ -13,55 +13,52 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow Builder.io / any frontend
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# -----------------------------
-# Load model
-# -----------------------------
 MODEL_PATH = os.path.join(BASE_DIR, "handwritten_text_rnn.h5")
 TEXT_PATH = os.path.join(BASE_DIR, "text_corpus.txt")
 
+# -----------------------------
+# Load model (DEBUG INCLUDED)
+# -----------------------------
 model = load_model(MODEL_PATH)
+print("MODEL LOADED — VOCAB SIZE:", model.output_shape[-1])
 
 # -----------------------------
-# Load corpus safely (NO CRASH)
+# Load corpus (NO FALLBACK)
 # -----------------------------
-try:
-    with open(TEXT_PATH, "r", encoding="utf-8") as f:
-        text = f.read().strip()
-except Exception:
-    text = ""
+if not os.path.exists(TEXT_PATH):
+    raise RuntimeError("text_corpus.txt missing. Must match training corpus.")
 
-# Fallback corpus if file is missing or too small
-if len(text) < 50:
-    text = (
-        "This is a fallback text corpus used for handwritten text generation. "
-        "It ensures the API can run safely even when the original dataset "
-        "is small or missing. The model will still generate character patterns."
-    )
+with open(TEXT_PATH, "r", encoding="utf-8") as f:
+    text = f.read()
+
+if len(text) < 100:
+    raise RuntimeError("text_corpus.txt too small. Must be same as training.")
 
 # -----------------------------
-# Vocabulary
+# Vocabulary (MUST MATCH TRAINING)
 # -----------------------------
-chars = sorted(list(set(text)))
+chars = sorted(set(text))
 vocab_size = len(chars)
+
+print("RUNTIME VOCAB SIZE:", vocab_size)
 
 char_to_idx = {c: i for i, c in enumerate(chars)}
 idx_to_char = {i: c for i, c in enumerate(chars)}
 
 # -----------------------------
-# Sequence length (SAFE, NO CRASH)
+# Sequence length (MATCH TRAINING)
 # -----------------------------
-MAX_SEQUENCE_LENGTH = 60
-sequence_length = min(MAX_SEQUENCE_LENGTH, max(10, len(text) - 1))
+SEQUENCE_LENGTH = 40  # same as training
 
 # -----------------------------
-# Sampling function
+# Sampling
 # -----------------------------
 def sample(preds, temperature=0.4):
     preds = np.asarray(preds).astype("float64")
@@ -71,25 +68,19 @@ def sample(preds, temperature=0.4):
     return np.random.choice(len(preds), p=preds)
 
 # -----------------------------
-# Text generation (RUNTIME SAFE)
+# Text generation
 # -----------------------------
 def generate_text(length=120):
-    # Recompute safe sequence length at runtime
-    effective_seq_len = min(sequence_length, len(text) - 1)
-
-    if effective_seq_len < 5:
-        return "Dataset too small to generate text safely."
-
-    max_start = len(text) - effective_seq_len - 1
+    max_start = len(text) - SEQUENCE_LENGTH - 1
     if max_start <= 0:
-        return "Dataset too small to select a valid starting point."
+        raise RuntimeError("Corpus too small for generation.")
 
     start = random.randint(0, max_start)
-    seed = text[start : start + effective_seq_len]
+    seed = text[start : start + SEQUENCE_LENGTH]
     generated = seed
 
     for _ in range(length):
-        x = np.zeros((1, effective_seq_len, vocab_size))
+        x = np.zeros((1, SEQUENCE_LENGTH, vocab_size))
         for t, char in enumerate(seed):
             x[0, t, char_to_idx[char]] = 1
 
@@ -111,15 +102,13 @@ def health():
 @app.get("/generate")
 def generate():
     try:
-        text_out = generate_text(length=120)
         return {
             "success": True,
-            "generated_text": text_out
+            "generated_text": generate_text()
         }
     except Exception as e:
         return {
             "success": False,
-            "error": "Internal Server Error in /generate",
-            "details": str(e),
+            "error": str(e),
             "trace": traceback.format_exc()
         }
