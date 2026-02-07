@@ -71,19 +71,28 @@ def sample(preds, temperature=0.4):
 # Text generation (SAFE)
 # -----------------------------
 def generate_text(length=120):
-    max_start = len(text) - sequence_length - 1
+    # Recompute safe sequence length at runtime
+    effective_seq_len = min(sequence_length, len(text) - 1)
 
+    if effective_seq_len < 5:
+        raise ValueError(
+            f"Dataset too small to generate text safely "
+            f"(text length = {len(text)})"
+        )
+
+    max_start = len(text) - effective_seq_len - 1
     if max_start <= 0:
         raise ValueError(
-            f"Dataset too small for sequence length {sequence_length}"
+            f"Invalid start range: text length={len(text)}, "
+            f"sequence_length={effective_seq_len}"
         )
 
     start = random.randint(0, max_start)
-    seed = text[start : start + sequence_length]
+    seed = text[start : start + effective_seq_len]
     generated = seed
 
     for _ in range(length):
-        x = np.zeros((1, sequence_length, vocab_size))
+        x = np.zeros((1, effective_seq_len, vocab_size))
         for t, char in enumerate(seed):
             x[0, t, char_to_idx[char]] = 1
 
@@ -94,6 +103,7 @@ def generate_text(length=120):
         seed = seed[1:] + next_char
 
     return generated
+
 
 # -----------------------------
 # Routes
@@ -117,3 +127,4 @@ def generate():
             "details": str(e),
             "trace": traceback.format_exc()
         }
+
